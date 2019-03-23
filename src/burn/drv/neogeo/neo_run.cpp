@@ -104,6 +104,7 @@ struct NeoMediaInfo {
 #include "burn_ym2610.h"
 #include "bitswap.h"
 #include "neocdlist.h"
+#include "xs.h" //XSXS
 
 // #undef USE_SPEEDHACKS
 
@@ -645,7 +646,10 @@ static INT32 LoadRoms()
 //		nSpriteSize[nNeoActiveSlot] = 0x5000000;
 //	}
 
-	NeoSpriteROM[nNeoActiveSlot] = (UINT8*)BurnMalloc(nSpriteSize[nNeoActiveSlot] < (nNeoTileMask[nNeoActiveSlot] << 7) ? ((nNeoTileMask[nNeoActiveSlot] + 1) << 7) : nSpriteSize[nNeoActiveSlot]);
+	//XSXS Keep size
+	INT32 xs_spriteSize = nSpriteSize[nNeoActiveSlot] < (nNeoTileMask[nNeoActiveSlot] << 7) ? ((nNeoTileMask[nNeoActiveSlot] + 1) << 7) : nSpriteSize[nNeoActiveSlot];
+	NeoSpriteROM[nNeoActiveSlot] = (UINT8*)BurnMalloc(xs_spriteSize);
+
 	if (NeoSpriteROM[nNeoActiveSlot] == NULL) {
 		return 1;
 	}
@@ -669,7 +673,9 @@ static INT32 LoadRoms()
 	}
 
 	// Load sprite data
+	if(xs_restore(NeoSpriteROM[nNeoActiveSlot], xs_spriteSize)) //XSXS
 	NeoLoadSprites(pInfo->nSpriteOffset, pInfo->nSpriteNum, NeoSpriteROM[nNeoActiveSlot], nSpriteSize[nNeoActiveSlot]);
+	xs_dump(); //XSXS
 
 	NeoTextROM[nNeoActiveSlot] = (UINT8*)BurnMalloc(nNeoTextROMSize[nNeoActiveSlot]);
 	if (NeoTextROM[nNeoActiveSlot] == NULL) {
@@ -680,7 +686,9 @@ static INT32 LoadRoms()
 	{
 		if (pInfo->nTextOffset != -1) {
 			// Load S ROM data
+			if(xs_restore(NeoTextROM[nNeoActiveSlot], nNeoTextROMSize[nNeoActiveSlot])) //XSXS
 			BurnLoadRom(NeoTextROM[nNeoActiveSlot], pInfo->nTextOffset, 1);
+			xs_dump(); //XSXS
 		} else {
 			// Extract data from the end of C ROMS
 			BurnUpdateProgress(0.0, _T("Decrypting text layer graphics...")/*, BST_DECRYPT_TXT*/, 0);
@@ -703,10 +711,18 @@ static INT32 LoadRoms()
 
 	// Load the roms into memory
 	if (BurnDrvGetHardwareCode() & HARDWARE_SNK_SMA_PROTECTION) {
+
+		if(xs_restore(Neo68KROMActive, nCodeSize[nNeoActiveSlot])){ //XSXS
+
 		BurnLoadRom(Neo68KROMActive + 0x0C0000, 0, 1);
 		NeoLoadCode(pInfo->nCodeOffset + 1, pInfo->nCodeNum - 1, Neo68KROMActive + 0x100000);
+
+		}xs_dump(); //XSXS
+
 	} else {
+        if(xs_restore(Neo68KROMActive, nCodeSize[nNeoActiveSlot])) //XSXS
 		NeoLoadCode(pInfo->nCodeOffset, pInfo->nCodeNum, Neo68KROMActive);
+        xs_dump(); //XSXS
 	}
 
 	NeoZ80ROM[nNeoActiveSlot] = (UINT8*)BurnMalloc(0x080000);	// Z80 cartridge ROM
@@ -715,7 +731,10 @@ static INT32 LoadRoms()
 	}
 	NeoZ80ROMActive = NeoZ80ROM[nNeoActiveSlot]; 
 
+	if(xs_restore(NeoZ80ROMActive, 0x080000)) //XSXS very small 0x080000 == 524288 == 524 ko !
 	BurnLoadRom(NeoZ80ROMActive, pInfo->nSoundOffset, 1);
+	xs_dump();
+
 	if (BurnDrvGetHardwareCode() & HARDWARE_SNK_ENCRYPTED_M1) {
 		neogeo_cmc50_m1_decrypt();
 	}
@@ -757,8 +776,9 @@ static INT32 LoadRoms()
 		if (!strcmp(BurnDrvGetTextA(DRV_NAME), "pbobblenb")) {
 			pADPCMData = YM2610ADPCMAROM[nNeoActiveSlot] + 0x200000;
  		}
-
+		if(xs_restore(pADPCMData, nYM2610ADPCMASize[nNeoActiveSlot])) //XSXS
 		NeoLoadADPCM(pInfo->nADPCMOffset, pInfo->nADPCMANum, pADPCMData);
+		xs_dump();
 
 		if (BurnDrvGetHardwareCode() & HARDWARE_SNK_SWAPV) {
 			for (INT32 i = 0; i < 0x00200000; i++) {
@@ -774,13 +794,13 @@ static INT32 LoadRoms()
 		if (YM2610ADPCMBROM[nNeoActiveSlot] == NULL) {
 			return 1;
 		}
-
+		if(xs_restore(YM2610ADPCMBROM[nNeoActiveSlot], nYM2610ADPCMBSize[nNeoActiveSlot])) //XSXS
 		NeoLoadADPCM(pInfo->nADPCMOffset + pInfo->nADPCMANum, pInfo->nADPCMBNum, YM2610ADPCMBROM[nNeoActiveSlot]);
+		xs_dump();
 	} else {
 		YM2610ADPCMBROM[nNeoActiveSlot] = YM2610ADPCMAROM[nNeoActiveSlot];
 		nYM2610ADPCMBSize[nNeoActiveSlot] = nYM2610ADPCMASize[nNeoActiveSlot];
 	}
-
 	return 0;
 }
 
@@ -3745,6 +3765,8 @@ static INT32 NeoInitCommon()
 	if (nNeoSystemType & NEO_SYS_CD) {
 		SwitchToMusashi();
 	}
+    
+	xs_free(); // XSXS
 
 	SekInit(0, 0x68000);											// Allocate 68000
     SekOpen(0);
@@ -4073,17 +4095,21 @@ INT32 NeoInit()
 	}
 
 	// Allocate all memory needed for ROM
+	INT32 nLen = 0; //XSXS
 	{
-		INT32 nLen;
+		// INT32 nLen; //XSXS
 
 		ROMIndex();													// Get amount of memory needed
 		nLen = ROMEnd - (UINT8*)0;
 		if ((AllROM = (UINT8*)BurnMalloc(nLen)) == NULL) {		// Allocate memory
 			return 1;
 		}
-		memset(AllROM, 0, nLen);									// Initialise memory
+		//memset(AllROM, 0, nLen);									// Initialise memory // XSXS BurnAlloc alreay do memset
 		ROMIndex();													// Index the allocated memory
+        
 	}
+    
+	if(xs_restore(AllROM, nLen)){ //XSXS BIOS
 
 	if (nNeoSystemType & NEO_SYS_PCB) {
 		BurnLoadRom(Neo68KBIOS, 0x00080 +     27, 1);
@@ -4115,6 +4141,7 @@ INT32 NeoInit()
 		return 1;
 	}
 
+	} xs_dump(); // XSXS
 	return NeoInitCommon();
 }
 

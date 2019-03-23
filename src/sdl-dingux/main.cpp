@@ -31,6 +31,8 @@
 #include "sdl_video.h"
 #include "gui_main.h"
 
+#include "xs.h" //XSXS 
+
 char szAppBurnVer[16] = VERSION;
 
 void CreateCapexLists()
@@ -83,28 +85,29 @@ void CreateCapexLists()
 
 int FindDrvByFileName(const char *fn)
 {
+    // XSXS fix it
+    xs_init(fn); // <= XSXS
 	char romname[MAX_PATH];
-	char *p;
 
-	// FIXME: use p = strrchr(fn, '/');
-	// and add given path to szAppRomPaths list
 	strcpy(szAppRomPaths[0], fn);
-	p = strrchr(szAppRomPaths[0], '/');
-	if(p) {
+	char* p = strrchr(szAppRomPaths[0], '/');
+	
+    if(p) {
 		p++;
+        // cut after ./mslug3.zip => mslug3.zip
 		strcpy(romname, p);
-
+        // Keep cutted value as path => ./
 		*p = 0;
-		p = strrchr(romname, '.');
-		if(p) *p = 0;
-		else {
-			// error
-			return -1;
-		}
-	} else {
-		// error
-		return -1;
-	}
+ 
+    }else{
+        strcpy(romname, szAppRomPaths[0]); //just copy mslug3.zip
+        strcpy(szAppRomPaths[0], ".");
+    }
+
+    //remove extension if needed
+	p = strrchr(romname, '.');
+	if(p) *p = 0;
+    //XSXS ---- END
 
 	// find rom by name
 	for(nBurnDrvSelect[0] = 0; nBurnDrvSelect[0] < nBurnDrvCount; nBurnDrvSelect[0]++) {
@@ -130,11 +133,12 @@ void parse_cmd(int argc, char *argv[], char *path)
 	int option_index, c;
 	int val;
 	char *p;
+    /* XSXS disable
 	printf("num args: %d\n",argc);
 	for (c=0;c<argc;c++)
 	{
 		printf("args %d is %s\n",c,argv[c]);
-	}
+	}*/
 
 	static struct option long_opts[] = {
 		{"sound-sdl-old", 0, &options.sound, 3},

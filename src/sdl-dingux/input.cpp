@@ -52,7 +52,7 @@ int DoInputBlank(int /*bDipSwitch*/)
 	memset(&bii,0,sizeof(bii));
 	BurnDrvGetInputInfo(&bii,i);
 
-	printf("c %s\n",bii.szInfo);
+	//printf("c %s\n",bii.szInfo); //XSXS disabled
 
 	//if (bDipSwitch==0 && bii.nType==2) continue; // Don't blank the dip switches
 
