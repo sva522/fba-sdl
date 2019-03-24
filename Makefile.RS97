@@ -30,7 +30,7 @@ USE_LIBAO = 1
 #	Specify paths/files
 #
 
-objdir	= obj/dingux/
+objdir	= obj/RS97/
 srcdir	= src/
 
 alldir	= burn \
@@ -392,11 +392,11 @@ ifeq ($(MAKELEVEL),0)
 ifdef DEPEND
 
 all:	init $(autdep) $(autobj)
-	@$(MAKE) -f Makefile.dingux
+	@$(MAKE) -f Makefile.RS97
 else
 
 all:	init $(autobj)
-	@$(MAKE) -f Makefile.dingux
+	@$(MAKE) -f Makefile.RS97
 endif
 else
 

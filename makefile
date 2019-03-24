@@ -30,7 +30,7 @@ USE_LIBAO = 1
 #	Specify paths/files
 #
 
-objdir	= obj/dingux-gcc/
+objdir	= obj/linux/
 srcdir	= src/
 
 alldir	= burn \
@@ -96,11 +96,7 @@ alldir	= burn \
 
 incdir	= $(foreach dir,$(alldir),-I$(srcdir)$(dir)) -I$(objdir)dep/generated -I/local/include -I/include/SDL
 
-ifeq ($(OS),Windows_NT)
-lib = -static -lstdc++ -lmingw32 -Wl,-Bdynamic -lSDL -lSDL_image -lz
-else
 lib = -lstdc++ -lSDL -lSDL_image -lz
-endif
 
 ifdef USE_LIBAO
 	lib += -lao
@@ -337,7 +333,7 @@ ifdef USE_LIBAO
 	CXXFLAGS += -DUSE_LIBAO
 endif
 
-DEF = -DUSE_SPEEDHACKS -DBUILD_SDL
+DEF = -DUSE_SPEEDHACKS -DBUILD_SDL -LINUX_PC
 
 ifdef	DEBUG
 	DEF += -DFBA_DEBUG -g
@@ -365,14 +361,7 @@ ifndef DEBUG
 LDFLAGS += -s
 endif
 
-ASFLAGS = -O0
-
-ifeq ($(OS),Windows_NT)
-CFLAGS_CONSOLE = -mno-cygwin -mconsole -pipe -Wall -W $(DEF) $(incdir)
-ASFLAGS += -f coff
-else
-ASFLAGS += -f elf64
-endif
+ASFLAGS = -O0 -f elf64
 
 #
 #

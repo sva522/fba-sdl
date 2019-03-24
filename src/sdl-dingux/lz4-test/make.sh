@@ -1,7 +1,8 @@
-#!/bin/bash
+    #!/bin/bash
 
 CC=g++
-CFLAGS="-O0 -g -Wall"
+CFLAGS="-O0 -g -Wall -lpthread -D_REENTRANT"
+#CFLAGS="-O3 -Wall -lpthread -D_REENTRANT"
 EXE=lz4-test
 
 if [ ! -z "$1" ]; then
@@ -16,5 +17,5 @@ if [ ! -f lz4_all.o ]; then
 fi
 rm -f main.o
 $CC $CFLAGS -o main.o -c main.cpp
-$CC -o $EXE main.o lz4_all.o
+$CC $CFLAGS -o $EXE main.o lz4_all.o
 rm -f main.o

@@ -10,11 +10,11 @@
 #include "lz4frame.h"
 
 FILE* _cacheFile = NULL;
+char* _cacheFilePath = NULL;
 
 // try to restore this
-#ifdef FBA_DEBUG
+#ifdef LINUX_PC
 bool _dump = false;
-char* _cacheFilePath = NULL;
 
 uint8_t* _restoreBuffer = NULL;
 uint32_t _restoreBufferSize = 0;
@@ -28,7 +28,7 @@ void xs_free(){
     if(_cacheFile){
         fclose(_cacheFile); _cacheFile = NULL;
         
-        #ifdef FBA_DEBUG
+        #ifdef LINUX_PC
         double mo = static_cast<double>(_total) / 1000000;
         double moComp = static_cast<double>(_totalCompressed) / 1000000;
         if(_dump){
@@ -53,7 +53,7 @@ void _xs_init(){
     // try to open cacheFile for restore
     _cacheFile = fopen(_cacheFilePath, "rb");
     
-    #ifdef FBA_DEBUG
+    #ifdef LINUX_PC
     printf("\n"); 
 
     // Open for restore failed ?
@@ -80,10 +80,10 @@ void xs_init(const char* romName){
 
     // init members vars
     _cacheFile = NULL;
+    _cacheFilePath = NULL;
 
-    #ifdef FBA_DEBUG
+    #ifdef LINUX_PC
         _dump = false;
-        _cacheFilePath = NULL;
 
         _restoreBuffer = NULL;
         _restoreBufferSize = 0;
@@ -119,14 +119,14 @@ void _safeWrite(FILE* f, const uint8_t* data, uint32_t toWrite){
         toWrite -= written;
         total   += written;
 
-        #ifdef FBA_DEBUG
+        #ifdef LINUX_PC
         assert(written > 0);
         #endif
     } 
 }
 
 void xs_dump(){
-    #ifdef FBA_DEBUG
+    #ifdef LINUX_PC
 
     // We need to dump
     if(_dump && _cacheFile && _restoreBuffer && _restoreBufferSize){
@@ -239,7 +239,7 @@ void _safeRead(FILE* f, uint8_t* data, uint32_t toRead){
         toRead -= got;
         total  += got;
 
-        #ifdef FBA_DEBUG
+        #ifdef LINUX_PC
         assert(got > 0);
         #endif
     }  
@@ -250,7 +250,7 @@ void _safeRead(FILE* f, uint8_t* data, uint32_t toRead){
 bool xs_restore(uint8_t* data, uint32_t size){
     _xs_init(); //open file if necessary
 
-    #ifdef FBA_DEBUG
+    #ifdef LINUX_PC
     static bool firstCall = true;
     if(firstCall){ firstCall = false; printf("\n"); }
 
@@ -272,7 +272,7 @@ bool xs_restore(uint8_t* data, uint32_t size){
     _safeRead(_cacheFile, storedSize.data, sizeof(storedSize));
     uint32_t compressedSize = storedSize.size;
 
-    #ifdef FBA_DEBUG
+    #ifdef LINUX_PC
         double mo = static_cast<double>(compressedSize) / 1000000;
         printf("Restoring %.2f Mo... ", mo); fflush(stdout);
     #endif
@@ -306,7 +306,7 @@ bool xs_restore(uint8_t* data, uint32_t size){
     }
     
     LZ4F_freeDecompressionContext(dctx); dctx = NULL;
-    #ifdef FBA_DEBUG
+    #ifdef LINUX_PC
         mo = static_cast<double>(size) / 1000000;
         printf("(OK) (%.2f Mo)\n", mo);
 
