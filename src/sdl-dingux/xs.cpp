@@ -14,6 +14,8 @@ FILE* _cacheFile = NULL;
 // try to restore this
 #ifdef FBA_DEBUG
 bool _dump = false;
+char* _cacheFilePath = NULL;
+
 uint8_t* _restoreBuffer = NULL;
 uint32_t _restoreBufferSize = 0;
 
@@ -41,6 +43,39 @@ void xs_free(){
     }
 }
 
+// Full Init (open file) is performed on first restore
+void _xs_init(){
+
+    // execute on fist call
+    static bool firstCall = true;
+    if(!firstCall || !_cacheFilePath) return; firstCall = false;
+
+    // try to open cacheFile for restore
+    _cacheFile = fopen(_cacheFilePath, "rb");
+    
+    #ifdef FBA_DEBUG
+    printf("\n"); 
+
+    // Open for restore failed ?
+    if(!_cacheFile){
+        _dump = true;
+
+        // Cannot restore => so dump !
+        _cacheFile = fopen(_cacheFilePath, "wb");
+        if(!_cacheFile){
+            printf("Cannot open %s in write mode.\n", _cacheFilePath);
+            xs_free();
+        }
+        printf("\n\nDUMP to %s cache file ---\n\n", _cacheFilePath);
+
+    }else{
+        printf("\n\n%s cache found ! RESTORE --- \n\n", _cacheFilePath);
+    }
+    #endif
+
+    free(_cacheFilePath); _cacheFilePath = NULL;
+}
+
 void xs_init(const char* romName){
 
     // init members vars
@@ -48,6 +83,8 @@ void xs_init(const char* romName){
 
     #ifdef FBA_DEBUG
         _dump = false;
+        _cacheFilePath = NULL;
+
         _restoreBuffer = NULL;
         _restoreBufferSize = 0;
 
@@ -55,36 +92,16 @@ void xs_init(const char* romName){
         _totalCompressed = 0;
     #endif
 
-    // from romName ...
-    char* cacheFilePath = strdup(romName);
+    // Build cacheFilePath from romName
+    _cacheFilePath = strdup(romName);
 
-    // Build cacheFilePath
-    char* p = strrchr(cacheFilePath, '.');
+    char* p = strrchr(_cacheFilePath, '.');
     if(p && strlen(p) > 1){
         strcpy(p, ".x"); p = NULL;
-
-        // try to open cacheFile
-        _cacheFile = fopen(cacheFilePath, "rb");
-        
-        #ifdef FBA_DEBUG
-        if(!_cacheFile){
-            _dump = true;
-
-            // Cannot restore => so dump !
-            _cacheFile = fopen(cacheFilePath, "wb");
-            if(!_cacheFile){
-                printf("Cannot open %s in write mode.\n", cacheFilePath);
-                xs_free();
-            }
-            printf("\n\nDUMP to %s cache file ---\n\n", cacheFilePath);
-
-        }else{
-            printf("\n\n %s cache found ! RESTORE --- \n\n", cacheFilePath);
-        }
-        #endif
-    }      
-
-    free(cacheFilePath); cacheFilePath = NULL; p = NULL;
+    }else{
+        // No .zip or .7z format => No .x to load
+        free(_cacheFilePath); _cacheFilePath = NULL;
+    }         
 }
 
 union StoredSize {
@@ -231,6 +248,8 @@ void _safeRead(FILE* f, uint8_t* data, uint32_t toRead){
 // return true if restore is not aivailable and Neload SHOULD be used
 // return false if restore can be performed and and NeoLoad should NOT be used
 bool xs_restore(uint8_t* data, uint32_t size){
+    _xs_init(); //open file if necessary
+
     #ifdef FBA_DEBUG
     static bool firstCall = true;
     if(firstCall){ firstCall = false; printf("\n"); }
