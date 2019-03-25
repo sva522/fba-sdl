@@ -52,5 +52,5 @@ Yes it means, you keep the .x by side with the original .zip. But we both know s
 
 6.           Result
 
-As a result loading mslug3 : Before 12 min, Now with a 41 Mo .x file => 10 sec !!!
+As a result loading mslug3 : Before 12 min, Now with a 41 Mo .x file => 45 sec !!!
 
