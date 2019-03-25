@@ -673,9 +673,9 @@ static INT32 LoadRoms()
 	}
 
 	// Load sprite data
-	if(xs_restore(NeoSpriteROM[nNeoActiveSlot], xs_spriteSize)) //XSXS
+	if(xs_before("1-Sprites", NeoSpriteROM[nNeoActiveSlot], xs_spriteSize)) //XSXS
 	NeoLoadSprites(pInfo->nSpriteOffset, pInfo->nSpriteNum, NeoSpriteROM[nNeoActiveSlot], nSpriteSize[nNeoActiveSlot]);
-	xs_dump(); //XSXS
+	xs_after(); //XSXS
 
 	NeoTextROM[nNeoActiveSlot] = (UINT8*)BurnMalloc(nNeoTextROMSize[nNeoActiveSlot]);
 	if (NeoTextROM[nNeoActiveSlot] == NULL) {
@@ -686,9 +686,11 @@ static INT32 LoadRoms()
 	{
 		if (pInfo->nTextOffset != -1) {
 			// Load S ROM data
-			if(xs_restore(NeoTextROM[nNeoActiveSlot], nNeoTextROMSize[nNeoActiveSlot])) //XSXS
+            // Never tried this part => No modif
+            xs_before("1b-NeoTextROM"); //XSXS
+			//if(xs_before("1b-NeoTextROM", NeoTextROM[nNeoActiveSlot], nNeoTextROMSize[nNeoActiveSlot]))
 			BurnLoadRom(NeoTextROM[nNeoActiveSlot], pInfo->nTextOffset, 1);
-			xs_dump(); //XSXS
+			xs_after();
 		} else {
 			// Extract data from the end of C ROMS
 			BurnUpdateProgress(0.0, _T("Decrypting text layer graphics...")/*, BST_DECRYPT_TXT*/, 0);
@@ -712,17 +714,19 @@ static INT32 LoadRoms()
 	// Load the roms into memory
 	if (BurnDrvGetHardwareCode() & HARDWARE_SNK_SMA_PROTECTION) {
 
-		if(xs_restore(Neo68KROMActive, nCodeSize[nNeoActiveSlot])){ //XSXS
+        if(xs_before("2-Neo68KROM")){ //XSXS
+		//if(xs_before("2-Neo68KROM", Neo68KROMActive, nCodeSize[nNeoActiveSlot])){
 
 		BurnLoadRom(Neo68KROMActive + 0x0C0000, 0, 1);
 		NeoLoadCode(pInfo->nCodeOffset + 1, pInfo->nCodeNum - 1, Neo68KROMActive + 0x100000);
 
-		}xs_dump(); //XSXS
+		}xs_after(); //XSXS
 
 	} else {
-        if(xs_restore(Neo68KROMActive, nCodeSize[nNeoActiveSlot])) //XSXS
+        xs_before("2b-Neo68KROM"); //XSXS
+        //if(xs_before(Neo68KROMActive, nCodeSize[nNeoActiveSlot], "2b-Neo68KROM"))
 		NeoLoadCode(pInfo->nCodeOffset, pInfo->nCodeNum, Neo68KROMActive);
-        xs_dump(); //XSXS
+        xs_after(); //XSXS
 	}
 
 	NeoZ80ROM[nNeoActiveSlot] = (UINT8*)BurnMalloc(0x080000);	// Z80 cartridge ROM
@@ -731,9 +735,10 @@ static INT32 LoadRoms()
 	}
 	NeoZ80ROMActive = NeoZ80ROM[nNeoActiveSlot]; 
 
-	if(xs_restore(NeoZ80ROMActive, 0x080000)) //XSXS very small 0x080000 == 524288 == 524 ko !
+    xs_before("3-NeoZ80ROM");
+	//if(xs_before("3-NeoZ80ROM", NeoZ80ROMActive, 0x080000) //XSXS very small 0x080000 == 524288 == 524 ko !
 	BurnLoadRom(NeoZ80ROMActive, pInfo->nSoundOffset, 1);
-	xs_dump();
+	xs_after();
 
 	if (BurnDrvGetHardwareCode() & HARDWARE_SNK_ENCRYPTED_M1) {
 		neogeo_cmc50_m1_decrypt();
@@ -776,9 +781,10 @@ static INT32 LoadRoms()
 		if (!strcmp(BurnDrvGetTextA(DRV_NAME), "pbobblenb")) {
 			pADPCMData = YM2610ADPCMAROM[nNeoActiveSlot] + 0x200000;
  		}
-		if(xs_restore(pADPCMData, nYM2610ADPCMASize[nNeoActiveSlot])) //XSXS
+        //xs_before("4-NeoLoadADPCM"); //XSXS
+		if(xs_before("4-NeoLoadADPCM", pADPCMData, nYM2610ADPCMASize[nNeoActiveSlot]))
 		NeoLoadADPCM(pInfo->nADPCMOffset, pInfo->nADPCMANum, pADPCMData);
-		xs_dump();
+		xs_after();
 
 		if (BurnDrvGetHardwareCode() & HARDWARE_SNK_SWAPV) {
 			for (INT32 i = 0; i < 0x00200000; i++) {
@@ -794,9 +800,10 @@ static INT32 LoadRoms()
 		if (YM2610ADPCMBROM[nNeoActiveSlot] == NULL) {
 			return 1;
 		}
-		if(xs_restore(YM2610ADPCMBROM[nNeoActiveSlot], nYM2610ADPCMBSize[nNeoActiveSlot])) //XSXS
+        //xs_before("5-NeoLoadADPCM"); //XSXS
+		if(xs_before("5-NeoLoadADPCM", YM2610ADPCMBROM[nNeoActiveSlot], nYM2610ADPCMBSize[nNeoActiveSlot])) //XSXS
 		NeoLoadADPCM(pInfo->nADPCMOffset + pInfo->nADPCMANum, pInfo->nADPCMBNum, YM2610ADPCMBROM[nNeoActiveSlot]);
-		xs_dump();
+		xs_after();
 	} else {
 		YM2610ADPCMBROM[nNeoActiveSlot] = YM2610ADPCMAROM[nNeoActiveSlot];
 		nYM2610ADPCMBSize[nNeoActiveSlot] = nYM2610ADPCMASize[nNeoActiveSlot];
@@ -4109,7 +4116,8 @@ INT32 NeoInit()
         
 	}
     
-	if(xs_restore(AllROM, nLen)){ //XSXS BIOS
+    //xs_before("6-Neo68KBIOS");
+	if(xs_before("6-Neo68KBIOS", AllROM, nLen)){ //XSXS BIOS
 
 	if (nNeoSystemType & NEO_SYS_PCB) {
 		BurnLoadRom(Neo68KBIOS, 0x00080 +     27, 1);
@@ -4141,7 +4149,7 @@ INT32 NeoInit()
 		return 1;
 	}
 
-	} xs_dump(); // XSXS
+	} xs_after(); // XSXS
 	return NeoInitCommon();
 }
 

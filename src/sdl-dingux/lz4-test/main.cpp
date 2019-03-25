@@ -9,6 +9,7 @@
 #include <string>
 #include <unistd.h>
 #include <pthread.h>
+#include <list>
 
 using namespace std;
 
@@ -34,7 +35,7 @@ uint32_t safeRead(FILE* f, uint8_t* data, uint32_t toRead){
     uint32_t tries = 0;
     
     /*
-    const uint16_t mbSpeed = 0; // 0 unlimited / simulate slow read
+    const uint16_t mbSpeed = 8; // 0 unlimited / simulate slow read
     if(mbSpeed > 0) usleep(toRead / mbSpeed); // 1µs / o => 1Mo/sec
     */
 
@@ -45,6 +46,22 @@ uint32_t safeRead(FILE* f, uint8_t* data, uint32_t toRead){
         total += got;
 
         tries++;
+    }
+    return tries;  
+}
+
+uint32_t safeWrite(FILE* f, const uint8_t* data, uint32_t toWrite){
+    uint32_t total = 0;
+    uint32_t written = 0;
+    uint32_t tries = 0;
+
+    while(toWrite > 0){
+        written = fwrite(&data[total], sizeof(uint8_t), toWrite, f);
+        assert(written > 0);
+        toWrite -= written;
+        total   += written;
+
+        tries++; 
     }
     return tries;  
 }
@@ -158,78 +175,49 @@ uint32_t loadRaw(const char* filePath, uint8_t* buffer, uint32_t fileSize){
 
 const uint16_t decBufferSize = UINT16_MAX; // 65535 => ~= 65Ko
 
-enum SharedSate{
-    //[A]  [B]
-    EMPTY_EMPTY,
-    FILLED_EMPTY,
-    EMPTY_FILLED,
-    FILLED_FILLED
-};
-
 // Start value
 struct ThreadArg {
-    const uint8_t* bufferDecA;
-    const uint8_t* bufferDecB;
     uint8_t* buffer;
-    const uint32_t fileSize;
-    const int pipe;
+    const uint32_t fileSize;   
 };
 
-void* threadDecomp(void* arg){
+struct ThreadBuffer {
+    uint8_t* data;
+    uint16_t size; 
+};
+
+pthread_mutex_t accessList;
+std::list<ThreadBuffer> workList;
+
+void* threadDecompression(void* arg){
     // Get Args
     ThreadArg* args = reinterpret_cast<ThreadArg*>(arg);
-    const uint8_t* bufferDecA = args->bufferDecA;
-    const uint8_t* bufferDecB = args->bufferDecB;
     uint8_t* buffer           = args->buffer;
     const uint32_t fileSize   = args->fileSize;
-    const int pipe            = args->pipe;
-      
+
+    ThreadBuffer thBuffer = { NULL, 0};
+  
     LZ4F_dctx* dctx = NULL;
     LZ4F_createDecompressionContext(&dctx, LZ4F_VERSION);
 
     uint32_t remainingDec = fileSize;
     uint32_t totalDec = 0;
-    uint16_t toRead = 0;
-    
-    // State from from this thread point of view
-    // FILLED means, I! can read from it
-    // This thread want to ->empty<- bufferDec of data to final buffer
-    SharedSate state = EMPTY_EMPTY;
-    SharedSate nextState = EMPTY_EMPTY;
-    const uint8_t* bufferDec  = bufferDecA;
-    
+
     while(remainingDec > 0){
         
-        if(state == EMPTY_EMPTY){
-            read(pipe, &toRead, sizeof(toRead));
-            state = FILLED_EMPTY;
-            nextState = EMPTY_EMPTY;
-        }
-        switch(state){
-            case EMPTY_EMPTY:
-                printf("EMPTING Thread interblocking error\n");
-                exit(1);
-            break;
-            
-            case FILLED_EMPTY:
-                bufferDec = bufferDecA;
-                nextState = EMPTY_EMPTY;
-            break;
-            case EMPTY_FILLED:
-                bufferDec = bufferDecB;
-                nextState = EMPTY_EMPTY;
-            break;
-            case FILLED_FILLED:
-                bufferDec = bufferDecA;
-                nextState = EMPTY_FILLED;
-            break;
-        }
-        
-        safeDecompress(dctx, bufferDec, toRead, &buffer[totalDec], remainingDec);
-        state = nextState;
-        write(pipe, &state, sizeof(state));
-        
+        pthread_mutex_lock(&accessList);
+            while(workList.empty()){
+                pthread_mutex_unlock(&accessList);
+                usleep(100);
+                pthread_mutex_lock(&accessList);
+            }
+            thBuffer = workList.front(); workList.pop_front();      
+        pthread_mutex_unlock(&accessList);
+
+        safeDecompress(dctx, thBuffer.data, thBuffer.size, &buffer[totalDec], remainingDec);
+
         totalDec = fileSize - remainingDec;
+        delete[] thBuffer.data;
     }
     
     LZ4F_freeDecompressionContext(dctx); dctx = NULL;
@@ -238,29 +226,26 @@ void* threadDecomp(void* arg){
     return NULL;
 }
 
-uint32_t thDecomp(const char* filePath, uint8_t* buffer, uint32_t compressedSize, uint32_t fileSize){
+uint32_t threadedDecompression(const char* filePath, uint8_t* buffer, const uint32_t compressedSize, const uint32_t fileSize, uint16_t& maxQueueLenght){
     
-    uint8_t bufferDecA[decBufferSize];
-    uint8_t bufferDecB[decBufferSize];
-    uint8_t* bufferDec = bufferDecA;
-    
-    int pipesFid[2];
-    pipe(pipesFid);
-    int pipe = pipesFid[0];
-    
-    // Create share info
-    ThreadArg arg = { 
-        bufferDecA,
-        bufferDecB,
-        buffer,
+    // Init shared var
+    assert(pthread_mutex_init(&accessList,NULL) == 0);
+    pthread_mutex_lock(&accessList); bool locked = true; // Lock it from start
+
+    // Init buffer
+    uint8_t* bufferDec = NULL;
+    ThreadBuffer thBuffer = { NULL, 0};
+
+    // Init args
+    ThreadArg arg = {
+        buffer,        
         fileSize,
-        pipesFid[1]
     };
-    
+        
     // Create thread
-    pthread_t threadDecompression; //memset(&threadDecompression, 0, sizeof(threadDecompression);
+    pthread_t threadDecompInfo; //memset(&threadDecomp, 0, sizeof(threadDecomp);
     
-    if(pthread_create(&threadDecompression, NULL, threadDecomp, &arg) == -1) {
+    if(pthread_create(&threadDecompInfo, NULL, threadDecompression, &arg) == -1) {
 	        perror("pthread_create");
 	        return EXIT_FAILURE;
     }
@@ -273,63 +258,47 @@ uint32_t thDecomp(const char* filePath, uint8_t* buffer, uint32_t compressedSize
     uint16_t toRead = 0;
 
     uint32_t tries = 0;
-    uint32_t nbErrTries = 0;
-    
-    // State from this main thread point of view.
-    // EMPTY => I! can write in it (readed data).
-    // This thread want to ->fill<- bufferDec of data
-    SharedSate state = EMPTY_EMPTY;
-    SharedSate nextState = FILLED_EMPTY;
-    
+    uint32_t nbErrTries = 1;
+    maxQueueLenght = 0;
+    uint16_t queueLength = 0xFF;
     while(remaining > 0){
         
         // Compute next to read
         toRead =  decBufferSize;
         if(remaining < decBufferSize) toRead = remaining;
-        
-        // Blocked ?
-        if(state == FILLED_FILLED){
-             // Ask thread to empty one
-            read(pipesFid[0], &state, sizeof(state));            
-        }
-        
-        switch(state){    
-            case EMPTY_EMPTY:
-                bufferDec = bufferDecA;
-                nextState = FILLED_EMPTY;
-            break;
-            case FILLED_EMPTY:
-                bufferDec = bufferDecB;
-                nextState = FILLED_FILLED;
-            break;
-            case EMPTY_FILLED:
-                bufferDec = bufferDecA;
-                nextState = FILLED_FILLED;
-            break;
-                
-            case FILLED_FILLED: 
-                printf("FILLING Thread interblocking error\n");
-                exit(1);
-            break;
-        } 
-        
+        // Create buffer for reading
+        bufferDec = new uint8_t[toRead];     
+
         // Work...
         tries = safeRead(f, bufferDec, toRead);
-        write(pipe, &toRead, sizeof(toRead)); //.. done !
-        
-        // Record made work
-        state = nextState;
+
+        // ... done.
         if(tries > 1) nbErrTries += tries - 1;
-        
         total += toRead;
         remaining -= toRead;
+
+        // Sync
+        thBuffer.data = bufferDec;
+        thBuffer.size = toRead;
+        
+        if(!locked){ pthread_mutex_lock(&accessList); locked = true; }
+            workList.push_back(thBuffer);
+            queueLength = static_cast<uint16_t>(workList.size());
+            /*
+            // Limit memory usage;
+            while(queueLength > 50){ // => 3,2 Mo
+                pthread_mutex_unlock(&accessList); locked = false;
+                usleep(100);
+                pthread_mutex_lock(&accessList);
+                queueLength = static_cast<uint16_t>(workList.size());
+            }*/
+            maxQueueLenght = max(maxQueueLenght, queueLength);
+        pthread_mutex_unlock(&accessList); locked = false;
     }
-    // Close file and print benchmark
-    fclose(f); f = NULL; // fflush
-    
-    pthread_join (threadDecompression, NULL); // Last time to join
-    bufferDec = NULL;
-    
+    // Close file
+    fclose(f); f = NULL;
+
+    pthread_join (threadDecompInfo, NULL); // Last time to join
     return nbErrTries;
 }
 
@@ -371,7 +340,7 @@ uint32_t loadCompressed(const char* filePath, uint8_t* buffer, uint32_t compress
     
     LZ4F_freeDecompressionContext(dctx); dctx = NULL;
 
-    // Close file and print benchmark
+    // Close file
     fclose(f); f = NULL; // fflush
     return nbErrTries;
 }
@@ -392,9 +361,9 @@ int main(int argc, char* argv[]){
     const uint32_t fileSize = getFileSize(filePath);
     const uint32_t compressedSize = getFileSize(compressedFilePath.c_str());
     double mo = static_cast<double>(fileSize) / 1000000;
-    printf("Raw file size is %.2f\n", mo);
+    printf("Raw file size is %.2f Mo\n", mo);
     mo = static_cast<double>(compressedSize) / 1000000;
-    printf("Compressed file size is %.2f\n\n", mo);
+    printf("Compressed file size is %.2f Mo\n\n", mo);
 
     //Buffers
     uint8_t* buffer = new uint8_t[fileSize];
@@ -431,23 +400,24 @@ int main(int argc, char* argv[]){
 
         if(keep){ // Check to perform
             printf("Check %s !\n", memcmp(buffer, keep, fileSize) == 0 ? "OK" : "ERROR");
-            delete[] keep; keep = NULL;
         }
         
-        /*
+        
         // Thread Decompress ----------------------------------------------------------------------------------------------------------------
         memset(buffer, 0, fileSize);
+        uint16_t maxQueueLenght = 0;
         durationBeginMs = _xs_getCurrentTime();
         
-        tries = thDecomp(compressedFilePath.c_str(), buffer, compressedSize, fileSize);
+        tries = threadedDecompression(compressedFilePath.c_str(), buffer, compressedSize, fileSize, maxQueueLenght);
         
         durationMs = _xs_getCurrentTime() - durationBeginMs; durationBeginMs = 0;
         //      Loading Raw        file, in:
-        printf("Thread decompress  file, in: %.2f ms speed:%.2f Mo/sec tries:%u\n", durationMs, computeSpeed(fileSize, durationMs), tries);
+        printf("Thread decompress  file, in: %.2f ms speed:%.2f Mo/sec tries:%u maxQueueLenght=%d\n",
+                durationMs, computeSpeed(fileSize, durationMs), tries, maxQueueLenght);
         if(keep){ // Check to perform
             printf("Check %s !\n", memcmp(buffer, keep, fileSize) == 0 ? "OK" : "ERROR");
             
-        }*/
+        }
     }
 
     delete[] keep; keep = NULL;
