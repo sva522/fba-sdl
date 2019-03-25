@@ -12,9 +12,6 @@
 FILE* _cacheFile = NULL;
 char* _cacheFilePath = NULL;
 
-//1 => OK 42 sec
-const uint8_t max_restore = 0xFF; 
-
 // try to restore this
 #ifdef LINUX_PC
 bool _dump = false;
@@ -69,7 +66,7 @@ void xs_free(){
             printf("End of dump %.2f Mo to %.2f Mo.\n\n",  mo, moComp);
             
         }else{ // restore
-            printf("End of restore %.2f Mo from %.2fMo.\n\n", mo, moComp);  
+            printf("End of restore %.2f Mo from %.2f Mo.\n\n", mo, moComp);  
      
         }
         exit(0);
@@ -92,13 +89,10 @@ bool xs_before(const char* ressourceName, uint8_t* buffer, uint32_t size){
     _restoreBufferSize = size;
     // -----------------------
     
-    #endif
-    
     // SKIP
-    if(size == 0) return _skipBefore(ressourceName);
+    if(size == 0) return _skipBefore(ressourceName, size);
     
     // DUMP
-    #ifdef LINUX_PC
     if(_dump) return _dumpBefore(ressourceName);
     #endif
 

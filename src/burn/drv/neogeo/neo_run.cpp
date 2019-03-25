@@ -687,7 +687,7 @@ static INT32 LoadRoms()
 		if (pInfo->nTextOffset != -1) {
 			// Load S ROM data
             // Never tried this part => No modif
-            xs_before("1b-NeoTextROM"); //XSXS
+            xs_before("1b-NeoTextROM"); //XSXS not run on mslug3
 			//if(xs_before("1b-NeoTextROM", NeoTextROM[nNeoActiveSlot], nNeoTextROMSize[nNeoActiveSlot]))
 			BurnLoadRom(NeoTextROM[nNeoActiveSlot], pInfo->nTextOffset, 1);
 			xs_after();
@@ -723,8 +723,8 @@ static INT32 LoadRoms()
 		}xs_after(); //XSXS
 
 	} else {
-        xs_before("2b-Neo68KROM"); //XSXS
-        //if(xs_before(Neo68KROMActive, nCodeSize[nNeoActiveSlot], "2b-Neo68KROM"))
+        xs_before("2b-Neo68KROM"); //XSXS Not run on mslug3
+        //if(xs_before("2b-Neo68KROM", Neo68KROMActive, nCodeSize[nNeoActiveSlot]))
 		NeoLoadCode(pInfo->nCodeOffset, pInfo->nCodeNum, Neo68KROMActive);
         xs_after(); //XSXS
 	}
@@ -736,7 +736,7 @@ static INT32 LoadRoms()
 	NeoZ80ROMActive = NeoZ80ROM[nNeoActiveSlot]; 
 
     xs_before("3-NeoZ80ROM");
-	//if(xs_before("3-NeoZ80ROM", NeoZ80ROMActive, 0x080000) //XSXS very small 0x080000 == 524288 == 524 ko !
+	//if(xs_before("3-NeoZ80ROM", NeoZ80ROMActive, 0x080000)) //XSXS very small 0x080000 == 524288 == 524 ko !
 	BurnLoadRom(NeoZ80ROMActive, pInfo->nSoundOffset, 1);
 	xs_after();
 
@@ -800,8 +800,8 @@ static INT32 LoadRoms()
 		if (YM2610ADPCMBROM[nNeoActiveSlot] == NULL) {
 			return 1;
 		}
-        //xs_before("5-NeoLoadADPCM"); //XSXS
-		if(xs_before("5-NeoLoadADPCM", YM2610ADPCMBROM[nNeoActiveSlot], nYM2610ADPCMBSize[nNeoActiveSlot])) //XSXS
+        xs_before("4b-NeoLoadADPCM"); //XSXS //not run on mslug3
+		//if(xs_before("4b-NeoLoadADPCM", YM2610ADPCMBROM[nNeoActiveSlot], nYM2610ADPCMBSize[nNeoActiveSlot])) //XSXS
 		NeoLoadADPCM(pInfo->nADPCMOffset + pInfo->nADPCMANum, pInfo->nADPCMBNum, YM2610ADPCMBROM[nNeoActiveSlot]);
 		xs_after();
 	} else {
@@ -4116,8 +4116,9 @@ INT32 NeoInit()
         
 	}
     
-    //xs_before("6-Neo68KBIOS");
-	if(xs_before("6-Neo68KBIOS", AllROM, nLen)){ //XSXS BIOS
+    // Skip this one as it break run
+    xs_before("5-Neo68KBIOS"); {
+	//if(xs_before("5-Neo68KBIOS", AllROM, nLen)){ //XSXS BIOS
 
 	if (nNeoSystemType & NEO_SYS_PCB) {
 		BurnLoadRom(Neo68KBIOS, 0x00080 +     27, 1);

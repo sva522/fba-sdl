@@ -1,11 +1,4 @@
 
-#include <tchar.h>
-#include <burn.h> //BurnUpdateProgress
-char msg[32];
-void print(){
-    BurnUpdateProgress(0, _T(msg), false);
-}
-
 void _error(const char* msg){
     printf("%s\n");
 
@@ -107,66 +100,6 @@ uint32_t _readSizeInStream(FILE* f){
     return storedSize.size;
 }
 
-void _restoreFromFile(FILE* cacheFile, uint8_t* buffer, uint32_t size, uint32_t compressedSize){
-    // Create buffer decompression
-    const uint16_t decBufferSize = UINT16_MAX; // 65535 => ~= 65Ko
-    uint8_t bufferDec[decBufferSize];
-    memset(bufferDec, 0, decBufferSize);
-
-    // Create dictionnary
-    LZ4F_dctx* dctx = NULL;
-    LZ4F_createDecompressionContext(&dctx, LZ4F_VERSION);
-
-    uint32_t remaining = compressedSize;
-    uint32_t total = 0;
-    uint32_t remainingDec = size;
-    uint32_t totalDec = 0;
-    uint16_t toRead = 0;
-
-    while(remaining > 0){
-        toRead =  decBufferSize;
-        if(remaining < decBufferSize) toRead = remaining;
-        
-        _safeRead(cacheFile, bufferDec, toRead);
-        total += toRead;
-        remaining -= toRead;
-
-        _safeDecompress(dctx, bufferDec, toRead, &buffer[totalDec], remainingDec);
-        totalDec = size - remainingDec;
-    }
-    
-    LZ4F_freeDecompressionContext(dctx); dctx = NULL;
-}
-
-uint32_t _dumpToFile(FILE* cacheFile, uint8_t* buffer, uint32_t size){
-    
-     // Create maxCompress
-    LZ4F_preferences_t maxCompress; memset(&maxCompress, 0, sizeof(maxCompress));
-    maxCompress.compressionLevel = LZ4HC_CLEVEL_MAX;
-    maxCompress.favorDecSpeed = 1;
-
-    // Create buffer
-    const size_t bufferSize = LZ4F_compressFrameBound(_restoreBufferSize, &maxCompress);
-    uint8_t* bufferOut = new uint8_t[bufferSize];
-    memset(bufferOut, 0, bufferSize);
-
-    // Write size
-    uint32_t compressedSize = LZ4F_compressFrame(bufferOut, bufferSize, buffer, size, &maxCompress);
-    if (LZ4F_isError(compressedSize)) { // compressedSize may retreive error code
-        printf("Compression error: %s\n", LZ4F_getErrorName(compressedSize));
-        xs_free();
-    }
-
-    // Write chunck size as header // little endian
-    StoredSize storedSize; storedSize.size = compressedSize;
-    _safeWrite(_cacheFile, storedSize.data, sizeof(storedSize));
-    _safeWrite(_cacheFile, bufferOut, compressedSize);
-
-    delete[] bufferOut; bufferOut = NULL;
-    fflush(_cacheFile);
-    return compressedSize;
-}
-
 // Full Init (open file) is performed on first restore
 void _openCacheFile(){
 
@@ -200,6 +133,69 @@ void _openCacheFile(){
     free(_cacheFilePath); _cacheFilePath = NULL;
 }
 
+
+void _restoreFromFile(FILE* cacheFile, uint8_t* buffer, uint32_t size, uint32_t compressedSize){
+    // Create buffer decompression
+    const uint16_t decBufferSize = UINT16_MAX; // 65535 => ~= 65Ko
+    uint8_t bufferDec[decBufferSize];
+    memset(bufferDec, 0, decBufferSize);
+
+    // Create dictionnary
+    LZ4F_dctx* dctx = NULL;
+    LZ4F_createDecompressionContext(&dctx, LZ4F_VERSION);
+
+    uint32_t remaining = compressedSize;
+    uint32_t total = 0;
+    uint32_t remainingDec = size;
+    uint32_t totalDec = 0;
+    uint16_t toRead = 0;
+
+    while(remaining > 0){
+        toRead =  decBufferSize;
+        if(remaining < decBufferSize) toRead = remaining;
+        
+        _safeRead(cacheFile, bufferDec, toRead);
+        total += toRead;
+        remaining -= toRead;
+
+        _safeDecompress(dctx, bufferDec, toRead, &buffer[totalDec], remainingDec);
+        totalDec = size - remainingDec;
+    }
+    
+    LZ4F_freeDecompressionContext(dctx); dctx = NULL;
+}
+
+#ifdef LINUX_PC
+
+uint32_t _dumpToFile(FILE* cacheFile, uint8_t* buffer, uint32_t size){
+    
+     // Create maxCompress
+    LZ4F_preferences_t maxCompress; memset(&maxCompress, 0, sizeof(maxCompress));
+    maxCompress.compressionLevel = LZ4HC_CLEVEL_MAX;
+    maxCompress.favorDecSpeed = 1;
+
+    // Create buffer
+    const size_t bufferSize = LZ4F_compressFrameBound(_restoreBufferSize, &maxCompress);
+    uint8_t* bufferOut = new uint8_t[bufferSize];
+    memset(bufferOut, 0, bufferSize);
+
+    // Write size
+    uint32_t compressedSize = LZ4F_compressFrame(bufferOut, bufferSize, buffer, size, &maxCompress);
+    if (LZ4F_isError(compressedSize)) { // compressedSize may retreive error code
+        printf("Compression error: %s\n", LZ4F_getErrorName(compressedSize));
+        xs_free();
+    }
+
+    // Write chunck size as header // little endian
+    StoredSize storedSize; storedSize.size = compressedSize;
+    _safeWrite(_cacheFile, storedSize.data, sizeof(storedSize));
+    _safeWrite(_cacheFile, bufferOut, compressedSize);
+
+    delete[] bufferOut; bufferOut = NULL;
+    fflush(_cacheFile);
+    return compressedSize;
+}
+
 bool _dumpBefore(const char* ressourceName){
     #ifdef LINUX_PC
     printf("Start dump %s ----\n", ressourceName);
@@ -209,6 +205,7 @@ bool _dumpBefore(const char* ressourceName){
 }
 
 void _dumpAfter(){
+    
     double mo = static_cast<double>(_restoreBufferSize) / 1000000;
     printf("Dump and compressing data: %.2f Mo... ", mo); fflush(stdout);
     
@@ -221,25 +218,15 @@ void _dumpAfter(){
     _totalCompressed += compressedSize;   
 }
 
-bool _restoreBefore(const char* ressourceName, uint8_t* buffer, uint32_t size){
-     // to first max_restore record in cache file => For DEBUG
-    static uint8_t i = 0;
-    if(i > max_restore){
-        i++;
-        #ifdef LINUX_PC
-        printf("Abort Restore %i\n", i);
-        #endif
-        return true;
-    }
+#endif
 
-     // Print sdl
-    snprintf(msg, sizeof(msg), "Restore %s", ressourceName); print(); 
+bool _restoreBefore(const char* ressourceName, uint8_t* buffer, uint32_t size){
 
     uint32_t compressedSize = _readSizeInStream(_cacheFile);
 
     #ifdef LINUX_PC
         double mo = static_cast<double>(compressedSize) / 1000000;
-        printf("Restoring %.2f Mo... ", mo); fflush(stdout);
+        printf("Restoring %s %.2f Mo... ",ressourceName, mo); fflush(stdout);
     #endif
 
     _restoreFromFile(_cacheFile, buffer, size, compressedSize);
@@ -250,10 +237,6 @@ bool _restoreBefore(const char* ressourceName, uint8_t* buffer, uint32_t size){
 
         _total += size;
         _totalCompressed += compressedSize;
-    #else
-        // print SDL
-        snprintf(msg, sizeof(msg), "Restore %s done", ressourceName);
-        print();
     #endif
 
     // Nothing still to restore
@@ -261,13 +244,11 @@ bool _restoreBefore(const char* ressourceName, uint8_t* buffer, uint32_t size){
     return false; // restore done / => must not load
 }
 
-bool _skipBefore(const char* ressourceName){
-   // Print in SDL
-    snprintf(msg, sizeof(msg), "Skip %s", ressourceName);
-    print();
+bool _skipBefore(const char* ressourceName, uint32_t size){
     
     #ifdef LINUX_PC
-    printf("Skip ----------- %s\n", ressourceName);
+    double mo = static_cast<double>(_total) / 1000000;
+    printf("Skip ----------- %s (%2.f Mo)\n", ressourceName, mo);
     #endif
     
     // Perfom load
