@@ -23,7 +23,13 @@ uint32_t _total = 0;
 uint32_t _totalCompressed = 0;
 #endif
 
+#ifdef BENCHMARK
+double _benchmark = 0;
+FILE* _benchmarkFile = NULL;
+#endif
+
 #include "xs_utils.cpp"
+#include "xs_steps.cpp"
 
 void xs_init(const char* romName){
 
@@ -39,6 +45,10 @@ void xs_init(const char* romName){
 
         _total = 0;
         _totalCompressed = 0;
+    #endif
+    #ifdef BENCHMARK
+        _benchmark = 0;
+        _benchmarkFile = NULL;
     #endif
     // -------------------------
 
@@ -72,6 +82,10 @@ void xs_free(){
         exit(0);
         #endif
     }
+    
+    #ifdef BENCHMARK
+        if(_benchmarkFile){ fclose(_benchmarkFile); _benchmarkFile = NULL; }
+    #endif
 }
 
 // return true if restore is not aivailable and Neload SHOULD be used
@@ -94,7 +108,7 @@ bool xs_before(const char* ressourceName, uint8_t* buffer, uint32_t size){
     
     // DUMP
     if(_dump) return _dumpBefore(ressourceName);
-    #endif
+    #endif // ----------------------------
 
     // NORMAL (Cannot restore => load) 
     if(!_cacheFile) return true;
@@ -116,4 +130,7 @@ void xs_after(){
     _restoreBuffer = NULL;
     _restoreBufferSize = 0;
     #endif
+    
+    // RESTORE
+    _restoreAfter();
 }

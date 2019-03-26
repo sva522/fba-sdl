@@ -714,7 +714,7 @@ static INT32 LoadRoms()
 	// Load the roms into memory
 	if (BurnDrvGetHardwareCode() & HARDWARE_SNK_SMA_PROTECTION) {
 
-        if(xs_before("2-Neo68KROM")){ //XSXS
+        xs_before("2-Neo68KROM");{ //XSXS
 		//if(xs_before("2-Neo68KROM", Neo68KROMActive, nCodeSize[nNeoActiveSlot])){
 
 		BurnLoadRom(Neo68KROMActive + 0x0C0000, 0, 1);
@@ -781,8 +781,8 @@ static INT32 LoadRoms()
 		if (!strcmp(BurnDrvGetTextA(DRV_NAME), "pbobblenb")) {
 			pADPCMData = YM2610ADPCMAROM[nNeoActiveSlot] + 0x200000;
  		}
-        //xs_before("4-NeoLoadADPCM"); //XSXS
-		if(xs_before("4-NeoLoadADPCM", pADPCMData, nYM2610ADPCMASize[nNeoActiveSlot]))
+        xs_before("4-NeoLoadADPCM"); //XSXS
+		//if(xs_before("4-NeoLoadADPCM", pADPCMData, nYM2610ADPCMASize[nNeoActiveSlot]))
 		NeoLoadADPCM(pInfo->nADPCMOffset, pInfo->nADPCMANum, pADPCMData);
 		xs_after();
 
