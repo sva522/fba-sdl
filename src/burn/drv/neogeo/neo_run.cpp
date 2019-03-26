@@ -104,7 +104,6 @@ struct NeoMediaInfo {
 #include "burn_ym2610.h"
 #include "bitswap.h"
 #include "neocdlist.h"
-#include "xs.h" //XSXS
 
 // #undef USE_SPEEDHACKS
 
@@ -494,6 +493,8 @@ static INT32 FindROMs(UINT32 nType, INT32* pOffset, INT32* pNum)
 	return 0;
 }
 
+#include "xs.h" //XSXS
+
 static INT32 LoadRoms()
 {
 	NeoGameInfo info;
@@ -646,10 +647,9 @@ static INT32 LoadRoms()
 //		nSpriteSize[nNeoActiveSlot] = 0x5000000;
 //	}
 
-	//XSXS Keep size
-	INT32 xs_spriteSize = nSpriteSize[nNeoActiveSlot] < (nNeoTileMask[nNeoActiveSlot] << 7) ? ((nNeoTileMask[nNeoActiveSlot] + 1) << 7) : nSpriteSize[nNeoActiveSlot];
+    // XSXS keep size
+    INT32 xs_spriteSize = nSpriteSize[nNeoActiveSlot] < (nNeoTileMask[nNeoActiveSlot] << 7) ? ((nNeoTileMask[nNeoActiveSlot] + 1) << 7) : nSpriteSize[nNeoActiveSlot];
 	NeoSpriteROM[nNeoActiveSlot] = (UINT8*)BurnMalloc(xs_spriteSize);
-
 	if (NeoSpriteROM[nNeoActiveSlot] == NULL) {
 		return 1;
 	}
@@ -673,9 +673,9 @@ static INT32 LoadRoms()
 	}
 
 	// Load sprite data
-	if(xs_before(NeoSpriteROM[nNeoActiveSlot], xs_spriteSize)) //XSXS
+    if(xs_before(NeoSpriteROM[nNeoActiveSlot], xs_spriteSize)) //XSXS
 	NeoLoadSprites(pInfo->nSpriteOffset, pInfo->nSpriteNum, NeoSpriteROM[nNeoActiveSlot], nSpriteSize[nNeoActiveSlot]);
-	xs_after(); //XSXS
+    xs_after(); //XSXS
 
 	NeoTextROM[nNeoActiveSlot] = (UINT8*)BurnMalloc(nNeoTextROMSize[nNeoActiveSlot]);
 	if (NeoTextROM[nNeoActiveSlot] == NULL) {
@@ -686,7 +686,6 @@ static INT32 LoadRoms()
 	{
 		if (pInfo->nTextOffset != -1) {
 			// Load S ROM data
-            // Never tried this part => No modif
 			BurnLoadRom(NeoTextROM[nNeoActiveSlot], pInfo->nTextOffset, 1);
 		} else {
 			// Extract data from the end of C ROMS
@@ -710,10 +709,8 @@ static INT32 LoadRoms()
 
 	// Load the roms into memory
 	if (BurnDrvGetHardwareCode() & HARDWARE_SNK_SMA_PROTECTION) {
-
 		BurnLoadRom(Neo68KROMActive + 0x0C0000, 0, 1);
 		NeoLoadCode(pInfo->nCodeOffset + 1, pInfo->nCodeNum - 1, Neo68KROMActive + 0x100000);
-
 	} else {
 		NeoLoadCode(pInfo->nCodeOffset, pInfo->nCodeNum, Neo68KROMActive);
 	}
@@ -725,7 +722,6 @@ static INT32 LoadRoms()
 	NeoZ80ROMActive = NeoZ80ROM[nNeoActiveSlot]; 
 
 	BurnLoadRom(NeoZ80ROMActive, pInfo->nSoundOffset, 1);
-
 	if (BurnDrvGetHardwareCode() & HARDWARE_SNK_ENCRYPTED_M1) {
 		neogeo_cmc50_m1_decrypt();
 	}
@@ -784,11 +780,13 @@ static INT32 LoadRoms()
 		if (YM2610ADPCMBROM[nNeoActiveSlot] == NULL) {
 			return 1;
 		}
+
 		NeoLoadADPCM(pInfo->nADPCMOffset + pInfo->nADPCMANum, pInfo->nADPCMBNum, YM2610ADPCMBROM[nNeoActiveSlot]);
 	} else {
 		YM2610ADPCMBROM[nNeoActiveSlot] = YM2610ADPCMAROM[nNeoActiveSlot];
 		nYM2610ADPCMBSize[nNeoActiveSlot] = nYM2610ADPCMASize[nNeoActiveSlot];
 	}
+
 	return 0;
 }
 
@@ -4081,18 +4079,16 @@ INT32 NeoInit()
 	}
 
 	// Allocate all memory needed for ROM
-	INT32 nLen = 0; //XSXS
 	{
-		// INT32 nLen; //XSXS
+		INT32 nLen;
 
 		ROMIndex();													// Get amount of memory needed
 		nLen = ROMEnd - (UINT8*)0;
 		if ((AllROM = (UINT8*)BurnMalloc(nLen)) == NULL) {		// Allocate memory
 			return 1;
 		}
-		//memset(AllROM, 0, nLen);									// Initialise memory // XSXS BurnAlloc alreay do memset
+		memset(AllROM, 0, nLen);									// Initialise memory
 		ROMIndex();													// Index the allocated memory
-        
 	}
 
 	if (nNeoSystemType & NEO_SYS_PCB) {
