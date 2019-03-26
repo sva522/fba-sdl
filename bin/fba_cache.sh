@@ -8,11 +8,3 @@ for zip in ./*.zip; do
     fi
 done
 
-echo "RESTORE ---------------------------"    
-for zip in ./*.zip; do
-    if [ "$zip" != "./neogeo.zip" ]; then
-        rm -f *.log
-        ./fbasdl "$zip"
-        cat *.log 2>/dev/null && rm -f *.log 
-    fi
-done

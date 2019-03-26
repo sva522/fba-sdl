@@ -1,39 +1,3 @@
-#include <sys/time.h>
-
-double _getCurrentTime(){
-    struct timeval t; memset(&t, 0, sizeof(t));
-    gettimeofday(&t, 0);
-    return ((t.tv_sec + t.tv_usec*1e-6));
-}
-
-// Easy benchmark
-void ticktock(const char* ressourceName){
-    #ifdef LINUX_PC
-    static double time = 0;
-    static const char* keep = NULL;
-    // First call
-    if(ressourceName){
-        keep = ressourceName;
-        time = _getCurrentTime() * 1000;
-    // Second call
-    }else{
-        time = (_getCurrentTime() * 1000) - time;
-        printf("benchmark: %s %.2f ms\n");
-        keep = NULL; time = 0;
-    }
-    #endif
-}
-
-#include "tchar.h"
-// From burner_sdl.h
-int ProgressUpdateBurner(double, const TCHAR*, bool);
-
-char msgSdl[32];
-// progress 100% = 1.0
-// progress 1.0 / (double)totalSize / len
-void printSDL(){
-    ProgressUpdateBurner(1.0, msgSdl, false);
-}
 
 void _error(const char* msg){
     printf("%s\n");
@@ -62,22 +26,6 @@ void _safeRead(FILE* f, uint8_t* data, uint32_t toRead){
         assert(got > 0);
         #endif
     }  
-}
-
-void _safeWrite(FILE* f, const uint8_t* data, uint32_t toWrite){
-    uint32_t total = 0;
-    uint32_t written = 0;
-
-    while(toWrite > 0){
-        written = fwrite(&data[total], sizeof(uint8_t), toWrite, f);
-        
-        toWrite -= written;
-        total   += written;
-
-        #ifdef LINUX_PC
-        assert(written > 0);
-        #endif
-    } 
 }
 
 // At end all bufferDec is used (== toDec == remainingSrc == 0)
@@ -129,51 +77,13 @@ union StoredSize {
     uint8_t data[4];
 };
 
-uint32_t _readSizeInStream(FILE* f){
+void _restore(FILE* cacheFile, uint8_t* buffer, uint32_t size){
+    
     // Read size Little endian
     StoredSize storedSize; storedSize.size = 0;
-    _safeRead(f, storedSize.data, sizeof(storedSize));
-    return storedSize.size;
-}
-
-// Full Init (open file) is performed on first restore
-void _openCacheFile(){
-
-    // Execute on fist call (and if we have a file to open)
-    static bool firstCall = true;
-    if(!firstCall || !_cacheFilePath) return; firstCall = false;
-
-    // try to open cacheFile for restore
-    _cacheFile = fopen(_cacheFilePath, "rb");
+    _safeRead(cacheFile, storedSize.data, sizeof(storedSize));
+    uint32_t compressedSize = storedSize.size;
     
-    #ifdef LINUX_PC
-    printf("\n"); 
-
-    // Open for restore failed ?
-    if(!_cacheFile){
-        _dump = true;
-
-        // Cannot restore => so dump !
-        _cacheFile = fopen(_cacheFilePath, "wb");
-        if(!_cacheFile){
-            printf("Cannot open %s in write mode.\n", _cacheFilePath);
-            xs_free();
-        }
-        printf("\nDUMP to %s cache file ------\n\n", _cacheFilePath);
-
-    }else{
-        printf("\n%s cache found ! RESTORE ------ \n\n", _cacheFilePath);
-    }
-    #endif
-
-    free(_cacheFilePath); _cacheFilePath = NULL;
-    
-    #ifdef BENCHMARK
-        _benchmarkFile = fopen("fba-benchmark.log", "w");
-    #endif
-}
-
-void _restoreFromFile(FILE* cacheFile, uint8_t* buffer, uint32_t size, uint32_t compressedSize){
     // Create buffer decompression
     const uint16_t decBufferSize = UINT16_MAX; // 65535 => ~= 65Ko
     uint8_t bufferDec[decBufferSize];
@@ -206,7 +116,23 @@ void _restoreFromFile(FILE* cacheFile, uint8_t* buffer, uint32_t size, uint32_t 
 
 #ifdef LINUX_PC
 
-uint32_t _dumpToFile(FILE* cacheFile, uint8_t* buffer, uint32_t size){
+void _safeWrite(FILE* f, const uint8_t* data, uint32_t toWrite){
+    uint32_t total = 0;
+    uint32_t written = 0;
+
+    while(toWrite > 0){
+        written = fwrite(&data[total], sizeof(uint8_t), toWrite, f);
+        
+        toWrite -= written;
+        total   += written;
+
+        #ifdef LINUX_PC
+        assert(written > 0);
+        #endif
+    } 
+}
+
+uint32_t _dump(FILE* cacheFile, uint8_t* buffer, uint32_t size){
     
      // Create maxCompress
     LZ4F_preferences_t maxCompress; memset(&maxCompress, 0, sizeof(maxCompress));
@@ -222,7 +148,7 @@ uint32_t _dumpToFile(FILE* cacheFile, uint8_t* buffer, uint32_t size){
     uint32_t compressedSize = LZ4F_compressFrame(bufferOut, bufferSize, buffer, size, &maxCompress);
     if (LZ4F_isError(compressedSize)) { // compressedSize may retreive error code
         printf("Compression error: %s\n", LZ4F_getErrorName(compressedSize));
-        xs_free();
+        exit(1);
     }
 
     // Write chunck size as header // little endian
@@ -233,6 +159,10 @@ uint32_t _dumpToFile(FILE* cacheFile, uint8_t* buffer, uint32_t size){
     delete[] bufferOut; bufferOut = NULL;
     fflush(_cacheFile);
     return compressedSize;
+}
+
+double toMo(double o){
+    return static_cast<double>(o) / 1000000;
 }
 
 #endif
