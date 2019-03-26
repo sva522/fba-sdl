@@ -5,9 +5,9 @@
 #include <string.h> // strdup
 #include <assert.h> // assert
 
-#include "lz4.h"
-#include "lz4hc.h"
-#include "lz4frame.h"
+#include "lz4.h"   // lz4
+#include "lz4hc.h" // lz4 max compress 
+#include "lz4frame.h" // lz4 interoperable
 
 FILE* _cacheFile = NULL;
 char* _cacheFilePath = NULL;
@@ -15,12 +15,14 @@ char* _cacheFilePath = NULL;
 // try to restore this
 #ifdef LINUX_PC
 bool _dump = false;
+double _loadTime = 0;
 
 uint8_t* _restoreBuffer = NULL;
 uint32_t _restoreBufferSize = 0;
 
 uint32_t _total = 0;
 uint32_t _totalCompressed = 0;
+
 #endif
 
 #ifdef BENCHMARK

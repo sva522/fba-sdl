@@ -1,9 +1,38 @@
-
 #include <sys/time.h>
+
 double _getCurrentTime(){
     struct timeval t; memset(&t, 0, sizeof(t));
     gettimeofday(&t, 0);
     return ((t.tv_sec + t.tv_usec*1e-6));
+}
+
+// Easy benchmark
+void ticktock(const char* ressourceName){
+    #ifdef LINUX_PC
+    static double time = 0;
+    static const char* keep = NULL;
+    // First call
+    if(ressourceName){
+        keep = ressourceName;
+        time = _getCurrentTime() * 1000;
+    // Second call
+    }else{
+        time = (_getCurrentTime() * 1000) - time;
+        printf("benchmark: %s %.2f ms\n");
+        keep = NULL; time = 0;
+    }
+    #endif
+}
+
+#include "tchar.h"
+// From burner_sdl.h
+int ProgressUpdateBurner(double, const TCHAR*, bool);
+
+char msgSdl[32];
+// progress 100% = 1.0
+// progress 1.0 / (double)totalSize / len
+void printSDL(){
+    ProgressUpdateBurner(1.0, msgSdl, false);
 }
 
 void _error(const char* msg){
@@ -130,17 +159,17 @@ void _openCacheFile(){
             printf("Cannot open %s in write mode.\n", _cacheFilePath);
             xs_free();
         }
-        printf("\n\nDUMP to %s cache file ------\n\n", _cacheFilePath);
+        printf("\nDUMP to %s cache file ------\n\n", _cacheFilePath);
 
     }else{
-        printf("\n\n%s cache found ! RESTORE ------ \n\n", _cacheFilePath);
+        printf("\n%s cache found ! RESTORE ------ \n\n", _cacheFilePath);
     }
     #endif
 
     free(_cacheFilePath); _cacheFilePath = NULL;
     
     #ifdef BENCHMARK
-        _benchmarkFile = fopen("benchmark.txt", "w");
+        _benchmarkFile = fopen("fba-benchmark.log", "w");
     #endif
 }
 

@@ -4,6 +4,7 @@
 bool _dumpBefore(const char* ressourceName){
     #ifdef LINUX_PC
     printf("Start dump %s ----\n", ressourceName);
+    _loadTime = _getCurrentTime() * 1000;
     #endif
     // Do load so we can dump data after
     return true; 
@@ -12,6 +13,7 @@ bool _dumpBefore(const char* ressourceName){
 void _dumpAfter(){
     
     double mo = static_cast<double>(_restoreBufferSize) / 1000000;
+    printf("Loaded in %.2f ms\n", (_getCurrentTime() * 1000) - _loadTime);
     printf("Dump and compressing data: %.2f Mo... ", mo); fflush(stdout);
     
     uint32_t compressedSize =_dumpToFile(_cacheFile, _restoreBuffer, _restoreBufferSize);
@@ -35,9 +37,9 @@ bool _restoreBefore(const char* ressourceName, uint8_t* buffer, uint32_t size){
 
     #ifdef LINUX_PC
         double mo = static_cast<double>(compressedSize) / 1000000;
-        printf("Restoring %s %.2f Mo... ",ressourceName, mo); fflush(stdout);
+        printf("Restoring %s %.2f Mo... ", ressourceName, mo); fflush(stdout);
     #endif
-    
+    snprintf(msgSdl, sizeof(msgSdl), "Restoring %s... ", ressourceName); printSDL();
     
     _restoreFromFile(_cacheFile, buffer, size, compressedSize);
     
@@ -51,19 +53,25 @@ bool _restoreBefore(const char* ressourceName, uint8_t* buffer, uint32_t size){
     
     #ifdef BENCHMARK
         _benchmark = _getCurrentTime() - _benchmark;
-        fprintf(_benchmarkFile, "Restore %.2f sec", _benchmark); fflush(_benchmarkFile);
+        fprintf(_benchmarkFile, "Restore %s %.2f sec\n", ressourceName, _benchmark); fflush(_benchmarkFile);
         _benchmark = _getCurrentTime();
     #endif
 
     // Nothing still to restore
     if(feof(_cacheFile)) xs_free();
+    
+    #ifdef BENCHMARK
+        static bool firstCall = true; // skip restore of sprite
+        if(firstCall) firstCall = false; else return true; 
+    #endif
+    
     return false; // restore done / => must not load
 }
 
 void _restoreAfter(){
     #ifdef BENCHMARK
     _benchmark = _getCurrentTime() - _benchmark;
-    fprintf(_benchmarkFile, "Load %.2f sec", _benchmark); fflush(_benchmarkFile);
+    fprintf(_benchmarkFile, "Load %.2f sec\n", _benchmark); fflush(_benchmarkFile);
     #endif
 }
 

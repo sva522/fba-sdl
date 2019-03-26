@@ -8,3 +8,4 @@ void xs_after();
 
 void xs_free();
 
+void ticktock(const char* ressourceName = NULL);
